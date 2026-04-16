@@ -21,7 +21,8 @@ except ImportError:
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'chave-desenvolvimento-2024')
+app.secret_key = os.environ.get('SECRET_KEY', 'chave-desenvolvimento-2026')
+
 
 # Configurações
 PREFIXOS_OS = {
@@ -228,6 +229,9 @@ def init_db():
     
     conn.close()
     print("✅ Banco de dados inicializado!")
+    # Inicializa banco quando o app sobe (Railway / Gunicorn)
+with app.app_context():
+    init_db()
 
 # ============ DECORATORS ============
 def login_required(f):
