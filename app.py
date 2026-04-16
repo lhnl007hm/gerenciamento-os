@@ -91,9 +91,10 @@ def execute_query(query, args=(), fetch_one=False, fetch_all=False, commit=False
         
         result = None
         if fetch_one:
-            result = cur.fetchone()
+            result = dict(cur.fetchone()) if cur.fetchone() else None
         elif fetch_all:
-            result = cur.fetchall()
+            rows = cur.fetchall()
+            result = [dict(row) for row in rows] if rows else []
         
         if commit or not (fetch_one or fetch_all):
             conn.commit()
@@ -229,7 +230,8 @@ def init_db():
     
     conn.close()
     print("✅ Banco de dados inicializado!")
-    # Inicializa banco quando o app sobe (Railway / Gunicorn)
+
+# Inicializa banco quando o app sobe (Railway / Gunicorn)
 with app.app_context():
     init_db()
 
@@ -325,7 +327,7 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['nome'] = user['nome']
-            session['email'] = user['email'] if user.get('email') else 'master@compass.com.br'
+            session['email'] = user.get('email') if user.get('email') else 'master@compass.com.br'
             session['contrato_id'] = user['contrato_id']
             session['contrato_nome'] = user['contrato_nome']
             session['role'] = user['role']
@@ -354,11 +356,17 @@ def dashboard():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and PSYCOPG2_AVAILABLE:
-        total = execute_query("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s", (session['contrato_id'],), fetch_one=True)['total']
-        concluidas = execute_query("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s AND status = 'Concluído'", (session['contrato_id'],), fetch_one=True)['total']
-        andamento = execute_query("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s AND status = 'Em Andamento'", (session['contrato_id'],), fetch_one=True)['total']
-        afazer = execute_query("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s AND status = 'À Fazer'", (session['contrato_id'],), fetch_one=True)['total']
+        total = execute_query("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s", (session['contrato_id'],), fetch_one=True)
+        concluidas = execute_query("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s AND status = 'Concluído'", (session['contrato_id'],), fetch_one=True)
+        andamento = execute_query("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s AND status = 'Em Andamento'", (session['contrato_id'],), fetch_one=True)
+        afazer = execute_query("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s AND status = 'À Fazer'", (session['contrato_id'],), fetch_one=True)
         recentes = execute_query("SELECT * FROM atividades WHERE contrato_id = %s ORDER BY id DESC LIMIT 5", (session['contrato_id'],), fetch_all=True)
+        
+        total = total['total'] if total else 0
+        concluidas = concluidas['total'] if concluidas else 0
+        andamento = andamento['total'] if andamento else 0
+        afazer = afazer['total'] if afazer else 0
+        recentes = recentes if recentes else []
     else:
         conn = get_db()
         total = conn.execute("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = ?", (session['contrato_id'],)).fetchone()['total']
@@ -385,7 +393,7 @@ def atividades():
             WHERE a.contrato_id = %s
             ORDER BY a.id DESC
         """, (session['contrato_id'],), fetch_all=True)
-        atividades = [dict(a) for a in atividades] if atividades else []
+        atividades = atividades if atividades else []
     else:
         conn = get_db()
         cursor = conn.execute("""
@@ -515,8 +523,7 @@ def metricas():
             SELECT tipo, COUNT(*) as total,
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
                 SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-                ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN EXTRACT(EPOCH FROM (data_final::DATE - data_inicial::DATE))/86400 ELSE NULL END)::numeric, 1) as media_dias
+                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
             FROM atividades 
             {where_clause}
             GROUP BY tipo
@@ -538,8 +545,7 @@ def metricas():
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
                 SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
                 SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-                SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas,
-                ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN EXTRACT(EPOCH FROM (data_final::DATE - data_inicial::DATE))/86400 ELSE NULL END)::numeric, 1) as media_geral_dias
+                SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
             FROM atividades
             {where_clause}
         ''', params, fetch_one=True)
@@ -550,6 +556,11 @@ def metricas():
             WHERE contrato_id = %s
             ORDER BY mes DESC
         ''', (session['contrato_id'],), fetch_all=True)
+        
+        por_tipo = por_tipo if por_tipo else []
+        por_sistema = por_sistema if por_sistema else []
+        meses = meses if meses else []
+        stats = stats if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0}
     else:
         conn = get_db()
         
@@ -564,8 +575,7 @@ def metricas():
             SELECT tipo, COUNT(*) as total,
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
                 SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-                ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN julianday(data_final) - julianday(data_inicial) ELSE NULL END), 1) as media_dias
+                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
             FROM atividades 
             {where_clause}
             GROUP BY tipo
@@ -587,8 +597,7 @@ def metricas():
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
                 SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
                 SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-                SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas,
-                ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN julianday(data_final) - julianday(data_inicial) ELSE NULL END), 1) as media_geral_dias
+                SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
             FROM atividades
             {where_clause}
         ''', params).fetchone()
@@ -605,10 +614,7 @@ def metricas():
         por_tipo = [dict(r) for r in por_tipo] if por_tipo else []
         por_sistema = [dict(r) for r in por_sistema] if por_sistema else []
         meses = [dict(r) for r in meses] if meses else []
-        stats = dict(stats) if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0, 'media_geral_dias': 0}
-    
-    if stats is None:
-        stats = {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0, 'media_geral_dias': 0}
+        stats = dict(stats) if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0}
     
     return render_template('metricas.html', por_tipo=por_tipo, por_sistema=por_sistema, stats=stats, meses=meses, mes_selecionado=mes_filtro)
 
@@ -622,6 +628,7 @@ def exportar_relatorio():
             SELECT numero_os, titulo, data_inicial, data_final, sistema, status, tipo, descricao
             FROM atividades WHERE contrato_id = %s ORDER BY data_inicial DESC
         ''', (session['contrato_id'],), fetch_all=True)
+        atividades = atividades if atividades else []
     else:
         conn = get_db()
         atividades = conn.execute('''
@@ -652,10 +659,10 @@ def admin_dashboard():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and PSYCOPG2_AVAILABLE:
-        total = execute_query("SELECT COUNT(*) as total FROM atividades", fetch_one=True)['total']
-        concluidas = execute_query("SELECT COUNT(*) as total FROM atividades WHERE status = 'Concluído'", fetch_one=True)['total']
-        andamento = execute_query("SELECT COUNT(*) as total FROM atividades WHERE status = 'Em Andamento'", fetch_one=True)['total']
-        afazer = execute_query("SELECT COUNT(*) as total FROM atividades WHERE status = 'À Fazer'", fetch_one=True)['total']
+        total = execute_query("SELECT COUNT(*) as total FROM atividades", fetch_one=True)
+        concluidas = execute_query("SELECT COUNT(*) as total FROM atividades WHERE status = 'Concluído'", fetch_one=True)
+        andamento = execute_query("SELECT COUNT(*) as total FROM atividades WHERE status = 'Em Andamento'", fetch_one=True)
+        afazer = execute_query("SELECT COUNT(*) as total FROM atividades WHERE status = 'À Fazer'", fetch_one=True)
         
         por_contrato = execute_query("""
             SELECT c.nome, COUNT(a.id) as total
@@ -672,6 +679,13 @@ def admin_dashboard():
             JOIN usuarios u ON a.usuario_id = u.id
             ORDER BY a.id DESC LIMIT 10
         """, fetch_all=True)
+        
+        total = total['total'] if total else 0
+        concluidas = concluidas['total'] if concluidas else 0
+        andamento = andamento['total'] if andamento else 0
+        afazer = afazer['total'] if afazer else 0
+        por_contrato = por_contrato if por_contrato else []
+        recentes = recentes if recentes else []
     else:
         conn = get_db()
         total = conn.execute("SELECT COUNT(*) as total FROM atividades").fetchone()['total']
@@ -715,7 +729,7 @@ def admin_atividades():
             LEFT JOIN usuarios u ON a.usuario_id = u.id
             ORDER BY a.id DESC
         """, fetch_all=True)
-        atividades = [dict(a) for a in atividades] if atividades else []
+        atividades = atividades if atividades else []
     else:
         conn = get_db()
         cursor = conn.execute("""
@@ -738,6 +752,7 @@ def admin_nova_atividade():
     
     if database_url and PSYCOPG2_AVAILABLE:
         contratos = execute_query("SELECT * FROM contratos WHERE ativo = 1", fetch_all=True)
+        contratos = contratos if contratos else []
     else:
         conn = get_db()
         contratos = conn.execute("SELECT * FROM contratos WHERE ativo = 1").fetchall()
@@ -788,6 +803,7 @@ def admin_editar_atividade(id):
     if database_url and PSYCOPG2_AVAILABLE:
         atividade = execute_query("SELECT * FROM atividades WHERE id = %s", (id,), fetch_one=True)
         contratos = execute_query("SELECT * FROM contratos WHERE ativo = 1", fetch_all=True)
+        contratos = contratos if contratos else []
     else:
         conn = get_db()
         atividade = conn.execute("SELECT * FROM atividades WHERE id = ?", (id,)).fetchone()
@@ -857,8 +873,7 @@ def admin_metricas():
         SELECT tipo, COUNT(*) as total,
             SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-            ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN EXTRACT(EPOCH FROM (data_final::DATE - data_inicial::DATE))/86400 ELSE NULL END)::numeric, 1) as media_dias
+            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
         FROM atividades 
         {where_clause}
         GROUP BY tipo
@@ -892,8 +907,7 @@ def admin_metricas():
             SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
             SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-            SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas,
-            ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN EXTRACT(EPOCH FROM (data_final::DATE - data_inicial::DATE))/86400 ELSE NULL END)::numeric, 1) as media_geral_dias
+            SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
         FROM atividades
         {where_clause}
     ''', params, fetch_one=True)
@@ -904,8 +918,11 @@ def admin_metricas():
         ORDER BY mes DESC
     ''', fetch_all=True)
     
-    if stats is None:
-        stats = {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0, 'media_geral_dias': 0}
+    por_tipo = por_tipo if por_tipo else []
+    por_sistema = por_sistema if por_sistema else []
+    por_contrato = por_contrato if por_contrato else []
+    meses = meses if meses else []
+    stats = stats if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0}
     
     return render_template('admin_metricas.html', por_tipo=por_tipo, por_sistema=por_sistema, por_contrato=por_contrato, stats=stats, meses=meses, mes_selecionado=mes_filtro)
 
@@ -919,6 +936,7 @@ def admin_usuarios():
         LEFT JOIN contratos c ON u.contrato_id = c.id 
         ORDER BY u.id
     """, fetch_all=True)
+    usuarios = usuarios if usuarios else []
     
     return render_template('admin_usuarios.html', usuarios=usuarios)
 
@@ -927,6 +945,7 @@ def admin_usuarios():
 @admin_required
 def admin_novo_usuario():
     contratos = execute_query("SELECT * FROM contratos", fetch_all=True)
+    contratos = contratos if contratos else []
     
     if request.method == 'POST':
         username = request.form['username']
@@ -955,6 +974,7 @@ def admin_novo_usuario():
 def admin_editar_usuario(id):
     usuario = execute_query("SELECT * FROM usuarios WHERE id = %s", (id,), fetch_one=True)
     contratos = execute_query("SELECT * FROM contratos", fetch_all=True)
+    contratos = contratos if contratos else []
     
     if not usuario:
         flash('Usuário não encontrado!', 'danger')
@@ -1003,6 +1023,7 @@ def admin_excluir_usuario(id):
 @admin_required
 def admin_contratos():
     contratos = execute_query("SELECT * FROM contratos ORDER BY id", fetch_all=True)
+    contratos = contratos if contratos else []
     return render_template('admin_contratos.html', contratos=contratos)
 
 @app.route('/admin/contratos/novo', methods=['GET', 'POST'])
@@ -1054,7 +1075,7 @@ def admin_editar_contrato(id):
 def admin_excluir_contrato(id):
     usuarios = execute_query("SELECT COUNT(*) as total FROM usuarios WHERE contrato_id = %s", (id,), fetch_one=True)
     
-    if usuarios['total'] > 0:
+    if usuarios and usuarios['total'] > 0:
         return jsonify({'success': False, 'error': 'Existem usuários vinculados a este contrato!'})
     
     execute_query("DELETE FROM contratos WHERE id = %s", (id,), commit=True)
@@ -1071,7 +1092,6 @@ def internal_server_error(e):
 
 # ============ INICIALIZAÇÃO ============
 if __name__ == '__main__':
-    init_db()
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_ENV') == 'development'
     print("\n" + "="*50)
