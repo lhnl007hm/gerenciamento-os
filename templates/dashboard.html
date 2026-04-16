@@ -1,0 +1,511 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard - CompaSSS OS</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      :root {
+        --primary-green: #84c464;
+        --primary-black: #040404;
+        --primary-gray: #7c7c7c;
+        --secondary-gray: #262626;
+        --text-light: #ffffff;
+        --text-muted: #7c7c7c;
+        --border-dark: #262626;
+        --hover-bg: rgba(132, 196, 100, 0.1);
+      }
+
+      body {
+        background: var(--primary-black);
+        min-height: 100vh;
+        color: var(--text-light);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      .navbar {
+        background: var(--secondary-gray) !important;
+        border-bottom: 3px solid var(--primary-green);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      }
+
+      .navbar-brand {
+        font-weight: bold;
+        font-size: 1.5rem;
+        color: var(--primary-green) !important;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .navbar-brand img {
+        height: 40px;
+        width: 40px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 1px solid var(--primary-green);
+      }
+
+      .nav-link {
+        color: var(--text-light) !important;
+        transition: color 0.3s;
+      }
+
+      .nav-link:hover {
+        color: var(--primary-green) !important;
+      }
+
+      .nav-link.active {
+        color: var(--primary-green) !important;
+        font-weight: 600;
+      }
+
+      .card {
+        background: var(--secondary-gray);
+        border: 1px solid var(--border-dark);
+        border-radius: 15px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+        margin-bottom: 20px;
+      }
+
+      .card-header {
+        background: linear-gradient(
+          90deg,
+          #1a1a1a 0%,
+          var(--secondary-gray) 100%
+        );
+        border-bottom: 2px solid var(--primary-green);
+        color: var(--text-light);
+        font-weight: 600;
+        border-radius: 15px 15px 0 0 !important;
+        padding: 15px 20px;
+      }
+
+      .card-body {
+        padding: 25px;
+      }
+
+      .stat-card {
+        background: var(--secondary-gray);
+        border: 1px solid var(--border-dark);
+        border-radius: 15px;
+        padding: 20px;
+        transition:
+          transform 0.3s,
+          box-shadow 0.3s;
+      }
+
+      .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(132, 196, 100, 0.2);
+        border-color: var(--primary-green);
+      }
+
+      .stat-icon {
+        width: 50px;
+        height: 50px;
+        background: rgba(132, 196, 100, 0.1);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 15px;
+      }
+
+      .stat-icon i {
+        font-size: 24px;
+        color: var(--primary-green);
+      }
+
+      .stat-value {
+        font-size: 32px;
+        font-weight: bold;
+        color: var(--primary-green);
+        margin-bottom: 5px;
+      }
+
+      .stat-label {
+        color: var(--primary-gray);
+        font-size: 14px;
+      }
+
+      .btn-primary {
+        background: var(--primary-green);
+        border: none;
+        font-weight: 600;
+        padding: 12px 24px;
+        border-radius: 8px;
+        color: var(--primary-black);
+        transition: all 0.3s;
+      }
+
+      .btn-primary:hover {
+        background: #6ab04c;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(132, 196, 100, 0.3);
+        color: var(--primary-black);
+      }
+
+      .btn-outline-primary {
+        border-color: var(--primary-green);
+        color: var(--primary-green);
+      }
+
+      .btn-outline-primary:hover {
+        background: var(--primary-green);
+        border-color: var(--primary-green);
+        color: var(--primary-black);
+      }
+
+      .list-group-item {
+        background: transparent;
+        border-bottom: 1px solid var(--border-dark);
+        color: var(--text-light);
+        padding: 15px;
+      }
+
+      .list-group-item:hover {
+        background: var(--hover-bg);
+      }
+
+      .badge {
+        padding: 5px 10px;
+        font-weight: 500;
+        border-radius: 20px;
+      }
+
+      .badge.bg-success {
+        background: var(--primary-green) !important;
+        color: var(--primary-black);
+      }
+
+      .badge.bg-warning {
+        background: #fdcb6e !important;
+        color: var(--primary-black);
+      }
+
+      .badge.bg-info {
+        background: #74b9ff !important;
+        color: var(--primary-black);
+      }
+
+      .badge.bg-secondary {
+        background: var(--primary-gray) !important;
+      }
+
+      .user-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .user-avatar {
+        width: 35px;
+        height: 35px;
+        background: var(--primary-green);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--primary-black);
+        font-weight: bold;
+      }
+
+      .alert {
+        border-radius: 10px;
+        border: none;
+      }
+
+      .text-muted {
+        color: var(--primary-gray) !important;
+      }
+
+      h2,
+      h5 {
+        color: var(--primary-green);
+      }
+
+      .dropdown-menu {
+        background: var(--secondary-gray);
+        border: 1px solid var(--primary-green);
+      }
+
+      .dropdown-item {
+        color: var(--text-light);
+      }
+
+      .dropdown-item:hover {
+        background: var(--hover-bg);
+        color: var(--primary-green);
+      }
+
+      .dropdown-divider {
+        border-color: var(--border-dark);
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+      <div class="container">
+        <a class="navbar-brand" href="/dashboard">
+          <img
+            src="{{ url_for('static', filename='img/logo.png') }}"
+            alt="CompaSSS Logo"
+          />
+          CompaSSS
+        </a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <div class="navbar-nav ms-auto">
+            <a class="nav-link active" href="/dashboard">
+              <i class="fas fa-chart-pie me-1"></i>Dashboard
+            </a>
+            <a class="nav-link" href="/atividades">
+              <i class="fas fa-list me-1"></i>Atividades
+            </a>
+            <a class="nav-link" href="/atividades/nova">
+              <i class="fas fa-plus-circle me-1"></i>Lançar Atividade
+            </a>
+            <a class="nav-link" href="/metricas">
+              <i class="fas fa-chart-bar me-1"></i>Métricas
+            </a>
+            <div class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle"
+                href="#"
+                id="userDropdown"
+                role="button"
+                data-bs-toggle="dropdown"
+              >
+                <div class="user-info">
+                  <div class="user-avatar">{{ session.nome[0] | upper }}</div>
+                  <span>{{ session.nome }}</span>
+                </div>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                  <a class="dropdown-item" href="#">
+                    <i class="fas fa-user me-2"></i>{{ session.username }}
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="#">
+                    <i class="fas fa-envelope me-2"></i>{{ session.email }}
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="/logout"
+                    style="color: #d63031"
+                  >
+                    <i class="fas fa-sign-out-alt me-2"></i>Sair
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container mt-4">
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %} {% for category, message in messages %}
+      <div
+        class="alert alert-{{ category }} alert-dismissible fade show"
+        role="alert"
+      >
+        {{ message }}
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+        ></button>
+      </div>
+      {% endfor %} {% endif %} {% endwith %}
+
+      <div class="row mb-4">
+        <div class="col">
+          <h2><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h2>
+          <p class="text-muted">
+            Bem-vindo, {{ session.nome }}! Contrato: {{ session.contrato_nome }}
+          </p>
+        </div>
+      </div>
+
+      <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="fas fa-tasks"></i>
+            </div>
+            <div class="stat-value">{{ total }}</div>
+            <div class="stat-label">Total de Atividades</div>
+          </div>
+        </div>
+        <div class="col-md-3 mb-3">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-value">{{ concluidas }}</div>
+            <div class="stat-label">Concluídas</div>
+          </div>
+        </div>
+        <div class="col-md-3 mb-3">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="fas fa-spinner"></i>
+            </div>
+            <div class="stat-value">{{ andamento }}</div>
+            <div class="stat-label">Em Andamento</div>
+          </div>
+        </div>
+        <div class="col-md-3 mb-3">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-value">{{ afazer }}</div>
+            <div class="stat-label">À Fazer</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-chart-pie me-2"></i>Distribuição por Status
+              </h5>
+            </div>
+            <div class="card-body">
+              <canvas id="statusChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-history me-2"></i>Atividades Recentes
+              </h5>
+            </div>
+            <div class="card-body p-0">
+              {% if recentes %}
+              <div class="list-group list-group-flush">
+                {% for atividade in recentes %}
+                <div class="list-group-item">
+                  <div
+                    class="d-flex w-100 justify-content-between align-items-start"
+                  >
+                    <div>
+                      <h6 class="mb-1">{{ atividade.titulo }}</h6>
+                      <small class="text-muted"
+                        >OS: {{ atividade.numero_os }}</small
+                      >
+                    </div>
+                    <small>{{ atividade.data_inicial }}</small>
+                  </div>
+                  <div class="mt-2">
+                    <span class="badge bg-secondary me-1"
+                      >{{ atividade.sistema }}</span
+                    >
+                    {% if atividade.status == 'Concluído' %}
+                    <span class="badge bg-success">{{ atividade.status }}</span>
+                    {% elif atividade.status == 'Em Andamento' %}
+                    <span class="badge bg-warning">{{ atividade.status }}</span>
+                    {% elif atividade.status == 'À Fazer' %}
+                    <span class="badge bg-info">{{ atividade.status }}</span>
+                    {% endif %}
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="text-center py-5">
+                <i
+                  class="fas fa-clipboard-list fa-3x mb-3"
+                  style="color: var(--primary-gray); opacity: 0.3"
+                ></i>
+                <p class="text-muted">Nenhuma atividade recente</p>
+                <a href="/atividades/nova" class="btn btn-primary">
+                  <i class="fas fa-plus-circle me-2"></i>Lançar Atividade
+                </a>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-bolt me-2"></i>Ações Rápidas
+              </h5>
+            </div>
+            <div class="card-body">
+              <a href="/atividades/nova" class="btn btn-primary me-2">
+                <i class="fas fa-plus-circle me-1"></i>Lançar Atividade
+              </a>
+              <a href="/atividades" class="btn btn-outline-primary me-2">
+                <i class="fas fa-list me-1"></i>Ver Todas Atividades
+              </a>
+              <a href="/metricas" class="btn btn-outline-primary">
+                <i class="fas fa-chart-line me-1"></i>Ver Métricas
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+              labels: ['Concluídas', 'Em Andamento', 'À Fazer'],
+              datasets: [{
+                  data: [{{ concluidas }}, {{ andamento }}, {{ afazer }}],
+                  backgroundColor: ['#84C464', '#fdcb6e', '#74b9ff'],
+                  borderWidth: 0
+              }]
+          },
+          options: {
+              responsive: true,
+              plugins: {
+                  legend: {
+                      position: 'bottom',
+                      labels: { color: '#ffffff' }
+                  }
+              }
+          }
+      });
+    </script>
+  </body>
+</html>

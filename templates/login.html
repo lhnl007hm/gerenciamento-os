@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - CompaSSS OS</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary-green: #84c464;
+        --primary-black: #040404;
+        --primary-gray: #7c7c7c;
+        --secondary-gray: #262626;
+        --text-light: #ffffff;
+        --text-muted: #7c7c7c;
+        --border-dark: #262626;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: var(--primary-black);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        position: relative;
+        overflow: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: absolute;
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(
+          circle,
+          rgba(132, 196, 100, 0.1) 0%,
+          transparent 70%
+        );
+        top: -250px;
+        right: -250px;
+        border-radius: 50%;
+      }
+
+      body::after {
+        content: "";
+        position: absolute;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(
+          circle,
+          rgba(38, 38, 38, 0.3) 0%,
+          transparent 70%
+        );
+        bottom: -200px;
+        left: -200px;
+        border-radius: 50%;
+      }
+
+      .login-container {
+        position: relative;
+        z-index: 10;
+        width: 100%;
+        max-width: 450px;
+        padding: 20px;
+      }
+
+      .login-card {
+        background: var(--secondary-gray);
+        border: 1px solid var(--border-dark);
+        border-radius: 20px;
+        box-shadow:
+          0 20px 40px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(132, 196, 100, 0.1);
+        padding: 40px;
+        animation: slideUp 0.5s ease-out;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .login-header {
+        text-align: center;
+        margin-bottom: 35px;
+      }
+
+      .logo-wrapper {
+        margin-bottom: 20px;
+      }
+
+      .logo {
+        width: 100px;
+        height: 100px;
+        background: var(--primary-black);
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        border: 2px solid var(--primary-green);
+        overflow: hidden;
+      }
+
+      .logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .system-name {
+        color: var(--primary-green);
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 5px;
+        letter-spacing: 1px;
+      }
+
+      .system-subtitle {
+        color: var(--primary-gray);
+        font-size: 14px;
+      }
+
+      .form-group {
+        margin-bottom: 25px;
+      }
+
+      .input-group {
+        position: relative;
+      }
+
+      .input-icon {
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--primary-gray);
+        font-size: 18px;
+        transition: color 0.3s;
+      }
+
+      .form-control {
+        width: 100%;
+        background: var(--primary-black);
+        border: 1px solid var(--primary-gray);
+        border-radius: 12px;
+        padding: 14px 15px 14px 45px;
+        color: var(--text-light);
+        font-size: 15px;
+        transition: all 0.3s;
+      }
+
+      .form-control:focus {
+        outline: none;
+        border-color: var(--primary-green);
+        box-shadow: 0 0 0 3px rgba(132, 196, 100, 0.1);
+      }
+
+      .form-control:focus + .input-icon,
+      .input-group:focus-within .input-icon {
+        color: var(--primary-green);
+      }
+
+      .form-control::placeholder {
+        color: rgba(124, 124, 124, 0.5);
+      }
+
+      .btn-login {
+        width: 100%;
+        background: var(--primary-green);
+        border: none;
+        border-radius: 12px;
+        padding: 14px;
+        color: var(--primary-black);
+        font-weight: 600;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .btn-login:hover {
+        background: #6ab04c;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(132, 196, 100, 0.4);
+      }
+
+      .btn-login i {
+        margin-right: 8px;
+      }
+
+      .login-footer {
+        text-align: center;
+        margin-top: 25px;
+        color: var(--primary-gray);
+        font-size: 13px;
+      }
+
+      .alert {
+        background: rgba(214, 48, 49, 0.1);
+        border: 1px solid #d63031;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 20px;
+        color: #ff7675;
+        font-size: 14px;
+      }
+
+      .alert i {
+        margin-right: 8px;
+      }
+
+      .demo-credentials {
+        background: rgba(132, 196, 100, 0.05);
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 20px;
+        border: 1px dashed var(--primary-green);
+      }
+
+      .demo-credentials h6 {
+        color: var(--primary-green);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 10px;
+      }
+
+      .credential-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        color: var(--text-light);
+        font-size: 13px;
+      }
+
+      .credential-item .role {
+        color: var(--primary-green);
+      }
+
+      .credential-item .pass {
+        color: var(--primary-gray);
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-container">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="logo-wrapper">
+            <div class="logo">
+              <img
+                src="{{ url_for('static', filename='img/logo.png') }}"
+                alt="CompaSSS Logo"
+              />
+            </div>
+          </div>
+          <div class="system-name">CompaSSS</div>
+          <div class="system-subtitle">
+            Sistema de Gestão de Ordens de Serviço
+          </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %} {% if
+        messages %} {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+          <i class="fas fa-exclamation-circle"></i>
+          {{ message }}
+        </div>
+        {% endfor %} {% endif %} {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+          <div class="form-group">
+            <div class="input-group">
+              <i class="fas fa-user input-icon"></i>
+              <input
+                type="text"
+                class="form-control"
+                name="username"
+                placeholder="Usuário"
+                required
+                autofocus
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="input-group">
+              <i class="fas fa-lock input-icon"></i>
+              <input
+                type="password"
+                class="form-control"
+                name="senha"
+                placeholder="Senha"
+                required
+              />
+            </div>
+          </div>
+
+          <button type="submit" class="btn-login">
+            <i class="fas fa-sign-in-alt"></i>
+            Entrar no Sistema
+          </button>
+        </form>
+
+        <!-- <div class="demo-credentials">
+          <h6><i class="fas fa-key me-2"></i>Credenciais de Acesso</h6>
+          <div class="credential-item">
+            <span><span class="role">Admin</span> (admin)</span>
+            <span class="pass">123456</span>
+          </div>
+          <div class="credential-item">
+            <span><span class="role">Gerente</span> (gerente)</span>
+            <span class="pass">123456</span>
+          </div>
+          <div class="credential-item">
+            <span><span class="role">Técnico</span> (tecnico)</span>
+            <span class="pass">123456</span>
+          </div>
+        </div> -->
+
+        <div class="login-footer">
+          <i class="far fa-copyright me-1"></i>
+          2026 CompaSSS OS - Todos os direitos reservados
+          <br />
+          <span style="font-size: 11px">{{ session.email }}</span>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
