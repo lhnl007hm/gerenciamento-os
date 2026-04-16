@@ -53,7 +53,8 @@ def get_db():
     """Retorna conexão com o banco (PostgreSQL ou SQLite)"""
     database_url = os.environ.get('DATABASE_URL')
     
-    if database_url and POSTGRES_AVAILABLE:
+    if database_url:
+        # PostgreSQL (produção)
         try:
             result = urlparse(database_url)
             conn = psycopg2.connect(
@@ -62,83 +63,102 @@ def get_db():
                 password=result.password,
                 host=result.hostname,
                 port=result.port,
-                sslmode='require'
+                sslmode='require',
+                connect_timeout=10
             )
+            print("✅ Conectado ao PostgreSQL (Session Pooler)")
             return conn
         except Exception as e:
-            print(f"❌ Erro PostgreSQL, usando SQLite: {e}")
+            print(f"❌ Erro PostgreSQL: {e}")
+            # Na Vercel, NÃO tente SQLite
+            if os.environ.get('VERCEL'):
+                raise e
+            # Localmente, fallback para SQLite
             return get_sqlite_connection()
     else:
+        # SQLite (desenvolvimento local)
         return get_sqlite_connection()
 
 def init_db():
     """Inicializa o banco de dados"""
     database_url = os.environ.get('DATABASE_URL')
     
+    # Na Vercel, NÃO tente criar SQLite (sistema de arquivos é somente leitura)
+    if os.environ.get('VERCEL'):
+        print("✅ Vercel detectada - usando PostgreSQL (tabelas já criadas no Supabase)")
+        return
+    
     if database_url and POSTGRES_AVAILABLE:
-        print("✅ Usando PostgreSQL (produção)")
-    else:
-        print("✅ Usando SQLite (desenvolvimento)")
-        conn = get_sqlite_connection()
-        cursor = conn.cursor()
+        print("✅ Usando PostgreSQL (produção) - tabelas já devem existir")
+        return
+    
+    # SQLite - APENAS desenvolvimento local
+    print("✅ Usando SQLite (desenvolvimento local)")
+    
+    if not os.path.exists('instance'):
+        os.makedirs('instance')
+    
+    conn = sqlite3.connect('instance/database.db')
+    cursor = conn.cursor()
+    
+    # Cria tabelas
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS contratos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            codigo TEXT UNIQUE NOT NULL,
+            ativo INTEGER DEFAULT 1
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL,
+            nome TEXT,
+            email TEXT,
+            contrato_id INTEGER,
+            role TEXT DEFAULT 'user',
+            ativo INTEGER DEFAULT 1,
+            FOREIGN KEY (contrato_id) REFERENCES contratos(id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS atividades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT NOT NULL,
+            data_inicial TEXT NOT NULL,
+            data_final TEXT,
+            descricao TEXT,
+            sistema TEXT NOT NULL,
+            status TEXT DEFAULT 'À Fazer',
+            tipo TEXT NOT NULL,
+            numero_os TEXT UNIQUE NOT NULL,
+            contrato_id INTEGER,
+            usuario_id INTEGER,
+            created_at TEXT,
+            FOREIGN KEY (contrato_id) REFERENCES contratos(id),
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        )
+    ''')
+    
+    # Dados iniciais
+    cursor.execute("SELECT COUNT(*) FROM contratos")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("INSERT INTO contratos (nome, codigo) VALUES ('E-Business Park', 'EBP001')")
+        cursor.execute("INSERT INTO contratos (nome, codigo) VALUES ('Contrato Beta', 'CT002')")
         
-        # Cria tabelas
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS contratos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT NOT NULL,
-                codigo TEXT UNIQUE NOT NULL,
-                ativo INTEGER DEFAULT 1
-            )
-        ''')
+        cursor.execute("INSERT INTO usuarios (username, senha, nome, email, contrato_id, role) VALUES ('admin', 'admin123', 'Administrador', 'admin@compass.com.br', 1, 'admin')")
+        cursor.execute("INSERT INTO usuarios (username, senha, nome, email, contrato_id, role) VALUES ('gerente', 'gerente123', 'Gerente', 'gerente@compass.com.br', 1, 'gerente')")
+        cursor.execute("INSERT INTO usuarios (username, senha, nome, email, contrato_id, role) VALUES ('tecnico', 'tecnico123', 'Técnico', 'tecnico@compass.com.br', 1, 'tecnico')")
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                senha TEXT NOT NULL,
-                nome TEXT,
-                email TEXT,
-                contrato_id INTEGER,
-                role TEXT DEFAULT 'user',
-                ativo INTEGER DEFAULT 1,
-                FOREIGN KEY (contrato_id) REFERENCES contratos(id)
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS atividades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                titulo TEXT NOT NULL,
-                data_inicial TEXT NOT NULL,
-                data_final TEXT,
-                descricao TEXT,
-                sistema TEXT NOT NULL,
-                status TEXT DEFAULT 'À Fazer',
-                tipo TEXT NOT NULL,
-                numero_os TEXT UNIQUE NOT NULL,
-                contrato_id INTEGER,
-                usuario_id INTEGER,
-                created_at TEXT,
-                FOREIGN KEY (contrato_id) REFERENCES contratos(id),
-                FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-            )
-        ''')
-        
-        # Dados iniciais
-        cursor.execute("SELECT COUNT(*) FROM contratos")
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO contratos (nome, codigo) VALUES ('E-Business Park', 'EBP001')")
-            cursor.execute("INSERT INTO contratos (nome, codigo) VALUES ('Contrato Beta', 'CT002')")
-            
-            cursor.execute("INSERT INTO usuarios (username, senha, nome, email, contrato_id, role) VALUES ('admin', 'admin123', 'Administrador', 'admin@compass.com.br', 1, 'admin')")
-            cursor.execute("INSERT INTO usuarios (username, senha, nome, email, contrato_id, role) VALUES ('gerente', 'gerente123', 'Gerente', 'gerente@compass.com.br', 1, 'gerente')")
-            cursor.execute("INSERT INTO usuarios (username, senha, nome, email, contrato_id, role) VALUES ('tecnico', 'tecnico123', 'Técnico', 'tecnico@compass.com.br', 1, 'tecnico')")
-        
-        conn.commit()
-        conn.close()
-        print("✅ Banco SQLite inicializado!")
-
+        print("✅ Dados iniciais inseridos!")
+    
+    conn.commit()
+    conn.close()
+    print("✅ Banco SQLite inicializado!")
         # ============ DECORATORS ============
 def login_required(f):
     @wraps(f)
