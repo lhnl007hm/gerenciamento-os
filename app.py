@@ -840,6 +840,235 @@ def admin_excluir_atividade(id):
     
     return jsonify({'success': True})
 
+@app.route('/admin/metricas')
+@login_required
+@admin_required
+def admin_metricas():
+    mes_filtro = request.args.get('mes', '')
+    
+    where_clause = ""
+    params = []
+    
+    if mes_filtro:
+        where_clause = "WHERE TO_CHAR(data_inicial::DATE, 'YYYY-MM') = %s"
+        params.append(mes_filtro)
+    
+    por_tipo = execute_query(f'''
+        SELECT tipo, COUNT(*) as total,
+            SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
+            SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
+            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
+            ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN EXTRACT(EPOCH FROM (data_final::DATE - data_inicial::DATE))/86400 ELSE NULL END)::numeric, 1) as media_dias
+        FROM atividades 
+        {where_clause}
+        GROUP BY tipo
+    ''', params, fetch_all=True)
+    
+    por_sistema = execute_query(f'''
+        SELECT sistema, COUNT(*) as total,
+            SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
+            SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
+            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
+        FROM atividades 
+        {where_clause}
+        GROUP BY sistema
+    ''', params, fetch_all=True)
+    
+    por_contrato = execute_query(f'''
+        SELECT c.nome, 
+            COUNT(a.id) as total,
+            SUM(CASE WHEN a.status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
+            SUM(CASE WHEN a.status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento
+        FROM contratos c
+        LEFT JOIN atividades a ON a.contrato_id = c.id
+        {("WHERE TO_CHAR(a.data_inicial::DATE, 'YYYY-MM') = %s" if mes_filtro else "")}
+        GROUP BY c.id
+        ORDER BY total DESC
+    ''', params if mes_filtro else [], fetch_all=True)
+    
+    stats = execute_query(f'''
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
+            SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
+            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
+            SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas,
+            ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN EXTRACT(EPOCH FROM (data_final::DATE - data_inicial::DATE))/86400 ELSE NULL END)::numeric, 1) as media_geral_dias
+        FROM atividades
+        {where_clause}
+    ''', params, fetch_one=True)
+    
+    meses = execute_query('''
+        SELECT DISTINCT TO_CHAR(data_inicial::DATE, 'YYYY-MM') as mes
+        FROM atividades
+        ORDER BY mes DESC
+    ''', fetch_all=True)
+    
+    if stats is None:
+        stats = {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0, 'media_geral_dias': 0}
+    
+    return render_template('admin_metricas.html', por_tipo=por_tipo, por_sistema=por_sistema, por_contrato=por_contrato, stats=stats, meses=meses, mes_selecionado=mes_filtro)
+
+@app.route('/admin/usuarios')
+@login_required
+@admin_required
+def admin_usuarios():
+    usuarios = execute_query("""
+        SELECT u.*, c.nome as contrato_nome 
+        FROM usuarios u 
+        LEFT JOIN contratos c ON u.contrato_id = c.id 
+        ORDER BY u.id
+    """, fetch_all=True)
+    
+    return render_template('admin_usuarios.html', usuarios=usuarios)
+
+@app.route('/admin/usuarios/novo', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_novo_usuario():
+    contratos = execute_query("SELECT * FROM contratos", fetch_all=True)
+    
+    if request.method == 'POST':
+        username = request.form['username']
+        senha = request.form['senha']
+        nome = request.form['nome']
+        email = request.form.get('email', '')
+        contrato_id = request.form['contrato_id']
+        role = request.form['role']
+        
+        try:
+            execute_query('''
+                INSERT INTO usuarios (username, senha, nome, email, contrato_id, role, ativo)
+                VALUES (%s, %s, %s, %s, %s, %s, 1)
+            ''', (username, senha, nome, email, contrato_id, role), commit=True)
+            flash('Usuário criado com sucesso!', 'success')
+        except Exception as e:
+            flash(f'Erro: {str(e)}', 'danger')
+        
+        return redirect('/admin/usuarios')
+    
+    return render_template('admin_usuario_form.html', usuario=None, contratos=contratos)
+
+@app.route('/admin/usuarios/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_editar_usuario(id):
+    usuario = execute_query("SELECT * FROM usuarios WHERE id = %s", (id,), fetch_one=True)
+    contratos = execute_query("SELECT * FROM contratos", fetch_all=True)
+    
+    if not usuario:
+        flash('Usuário não encontrado!', 'danger')
+        return redirect('/admin/usuarios')
+    
+    if request.method == 'POST':
+        nome = request.form['nome']
+        email = request.form.get('email', '')
+        contrato_id = request.form['contrato_id']
+        role = request.form['role']
+        ativo = 1 if request.form.get('ativo') else 0
+        
+        try:
+            if request.form.get('senha'):
+                execute_query('''
+                    UPDATE usuarios 
+                    SET nome = %s, email = %s, contrato_id = %s, role = %s, ativo = %s, senha = %s
+                    WHERE id = %s
+                ''', (nome, email, contrato_id, role, ativo, request.form['senha'], id), commit=True)
+            else:
+                execute_query('''
+                    UPDATE usuarios 
+                    SET nome = %s, email = %s, contrato_id = %s, role = %s, ativo = %s
+                    WHERE id = %s
+                ''', (nome, email, contrato_id, role, ativo, id), commit=True)
+            flash('Usuário atualizado!', 'success')
+        except Exception as e:
+            flash(f'Erro: {str(e)}', 'danger')
+        
+        return redirect('/admin/usuarios')
+    
+    return render_template('admin_usuario_form.html', usuario=usuario, contratos=contratos)
+
+@app.route('/admin/usuarios/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def admin_excluir_usuario(id):
+    if id == session['user_id']:
+        return jsonify({'success': False, 'error': 'Não pode excluir seu próprio usuário!'})
+    
+    execute_query("DELETE FROM usuarios WHERE id = %s", (id,), commit=True)
+    return jsonify({'success': True})
+
+@app.route('/admin/contratos')
+@login_required
+@admin_required
+def admin_contratos():
+    contratos = execute_query("SELECT * FROM contratos ORDER BY id", fetch_all=True)
+    return render_template('admin_contratos.html', contratos=contratos)
+
+@app.route('/admin/contratos/novo', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_novo_contrato():
+    if request.method == 'POST':
+        nome = request.form['nome']
+        codigo = request.form['codigo']
+        
+        try:
+            execute_query("INSERT INTO contratos (nome, codigo, ativo) VALUES (%s, %s, 1)", (nome, codigo), commit=True)
+            flash('Contrato criado com sucesso!', 'success')
+        except Exception as e:
+            flash(f'Erro: {str(e)}', 'danger')
+        
+        return redirect('/admin/contratos')
+    
+    return render_template('admin_contrato_form.html', contrato=None)
+
+@app.route('/admin/contratos/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_editar_contrato(id):
+    contrato = execute_query("SELECT * FROM contratos WHERE id = %s", (id,), fetch_one=True)
+    
+    if not contrato:
+        flash('Contrato não encontrado!', 'danger')
+        return redirect('/admin/contratos')
+    
+    if request.method == 'POST':
+        nome = request.form['nome']
+        codigo = request.form['codigo']
+        ativo = 1 if request.form.get('ativo') else 0
+        
+        try:
+            execute_query("UPDATE contratos SET nome = %s, codigo = %s, ativo = %s WHERE id = %s", (nome, codigo, ativo, id), commit=True)
+            flash('Contrato atualizado!', 'success')
+        except Exception as e:
+            flash(f'Erro: {str(e)}', 'danger')
+        
+        return redirect('/admin/contratos')
+    
+    return render_template('admin_contrato_form.html', contrato=contrato)
+
+@app.route('/admin/contratos/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def admin_excluir_contrato(id):
+    usuarios = execute_query("SELECT COUNT(*) as total FROM usuarios WHERE contrato_id = %s", (id,), fetch_one=True)
+    
+    if usuarios['total'] > 0:
+        return jsonify({'success': False, 'error': 'Existem usuários vinculados a este contrato!'})
+    
+    execute_query("DELETE FROM contratos WHERE id = %s", (id,), commit=True)
+    return jsonify({'success': True})
+
+# ============ ERROR HANDLERS ============
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    return render_template('500.html'), 500
+
 # ============ INICIALIZAÇÃO ============
 if __name__ == '__main__':
     init_db()
