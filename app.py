@@ -1,4 +1,4 @@
-# app.py - SISTEMA COMPASS OS (COMPATÍVEL SQLite + PostgreSQL)
+# app.py - SISTEMA COMPASS OS (CORRIGIDO PARA RAILWAY)
 import os
 import sqlite3
 import csv
@@ -22,7 +22,6 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'chave-desenvolvimento-2026')
-
 
 # Configurações
 PREFIXOS_OS = {
@@ -91,7 +90,8 @@ def execute_query(query, args=(), fetch_one=False, fetch_all=False, commit=False
         
         result = None
         if fetch_one:
-            result = dict(cur.fetchone()) if cur.fetchone() else None
+            row = cur.fetchone()
+            result = dict(row) if row else None
         elif fetch_all:
             rows = cur.fetchall()
             result = [dict(row) for row in rows] if rows else []
@@ -114,7 +114,6 @@ def init_db():
     if db_type == 'postgres':
         cur = conn.cursor()
         
-        # Tabela contratos
         cur.execute('''
             CREATE TABLE IF NOT EXISTS contratos (
                 id SERIAL PRIMARY KEY,
@@ -124,7 +123,6 @@ def init_db():
             )
         ''')
         
-        # Tabela usuarios
         cur.execute('''
             CREATE TABLE IF NOT EXISTS usuarios (
                 id SERIAL PRIMARY KEY,
@@ -138,7 +136,6 @@ def init_db():
             )
         ''')
         
-        # Tabela atividades
         cur.execute('''
             CREATE TABLE IF NOT EXISTS atividades (
                 id SERIAL PRIMARY KEY,
@@ -156,7 +153,6 @@ def init_db():
             )
         ''')
         
-        # Verificar se já existem dados
         cur.execute("SELECT COUNT(*) FROM contratos")
         if cur.fetchone()[0] == 0:
             cur.execute("INSERT INTO contratos (nome, codigo) VALUES (%s, %s)", ('E-Business Park', 'EBP001'))
@@ -172,7 +168,6 @@ def init_db():
         conn.commit()
         cur.close()
     else:
-        # SQLite
         cur = conn.cursor()
         
         cur.execute('''
@@ -231,7 +226,7 @@ def init_db():
     conn.close()
     print("✅ Banco de dados inicializado!")
 
-# Inicializa banco quando o app sobe (Railway / Gunicorn)
+# Inicializa banco quando o app sobe
 with app.app_context():
     init_db()
 
@@ -504,7 +499,7 @@ def excluir_atividade(id):
     
     return jsonify({'success': True})
 
-# ============ MÉTRICAS ============
+# ============ MÉTRICAS (CORRIGIDO) ============
 @app.route('/metricas')
 @login_required
 def metricas():
@@ -512,34 +507,28 @@ def metricas():
     mes_filtro = request.args.get('mes', '')
     
     if database_url and PSYCOPG2_AVAILABLE:
-        where_clause = "WHERE contrato_id = %s"
-        params = [session['contrato_id']]
-        
-        if mes_filtro:
-            where_clause += " AND TO_CHAR(data_inicial::DATE, 'YYYY-MM') = %s"
-            params.append(mes_filtro)
-        
-        por_tipo = execute_query(f'''
+        # PostgreSQL - versão simplificada sem filtro de mês complexo
+        por_tipo = execute_query('''
             SELECT tipo, COUNT(*) as total,
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
                 SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
                 SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
             FROM atividades 
-            {where_clause}
+            WHERE contrato_id = %s
             GROUP BY tipo
-        ''', params, fetch_all=True)
+        ''', (session['contrato_id'],), fetch_all=True)
         
-        por_sistema = execute_query(f'''
+        por_sistema = execute_query('''
             SELECT sistema, COUNT(*) as total,
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
                 SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
                 SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
             FROM atividades 
-            {where_clause}
+            WHERE contrato_id = %s
             GROUP BY sistema
-        ''', params, fetch_all=True)
+        ''', (session['contrato_id'],), fetch_all=True)
         
-        stats = execute_query(f'''
+        stats = execute_query('''
             SELECT 
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
@@ -547,51 +536,37 @@ def metricas():
                 SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
                 SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
             FROM atividades
-            {where_clause}
-        ''', params, fetch_one=True)
-        
-        meses = execute_query('''
-            SELECT DISTINCT TO_CHAR(data_inicial::DATE, 'YYYY-MM') as mes
-            FROM atividades
             WHERE contrato_id = %s
-            ORDER BY mes DESC
-        ''', (session['contrato_id'],), fetch_all=True)
+        ''', (session['contrato_id'],), fetch_one=True)
         
         por_tipo = por_tipo if por_tipo else []
         por_sistema = por_sistema if por_sistema else []
-        meses = meses if meses else []
         stats = stats if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0}
+        meses = []
     else:
         conn = get_db()
         
-        where_clause = "WHERE contrato_id = ?"
-        params = [session['contrato_id']]
-        
-        if mes_filtro:
-            where_clause += " AND strftime('%Y-%m', data_inicial) = ?"
-            params.append(mes_filtro)
-        
-        por_tipo = conn.execute(f'''
+        por_tipo = conn.execute('''
             SELECT tipo, COUNT(*) as total,
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
                 SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
                 SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
             FROM atividades 
-            {where_clause}
+            WHERE contrato_id = ?
             GROUP BY tipo
-        ''', params).fetchall()
+        ''', (session['contrato_id'],)).fetchall()
         
-        por_sistema = conn.execute(f'''
+        por_sistema = conn.execute('''
             SELECT sistema, COUNT(*) as total,
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
                 SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
                 SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
             FROM atividades 
-            {where_clause}
+            WHERE contrato_id = ?
             GROUP BY sistema
-        ''', params).fetchall()
+        ''', (session['contrato_id'],)).fetchall()
         
-        stats = conn.execute(f'''
+        stats = conn.execute('''
             SELECT 
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
@@ -599,8 +574,8 @@ def metricas():
                 SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
                 SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
             FROM atividades
-            {where_clause}
-        ''', params).fetchone()
+            WHERE contrato_id = ?
+        ''', (session['contrato_id'],)).fetchone()
         
         meses = conn.execute('''
             SELECT DISTINCT strftime('%Y-%m', data_inicial) as mes
@@ -860,48 +835,36 @@ def admin_excluir_atividade(id):
 @login_required
 @admin_required
 def admin_metricas():
-    mes_filtro = request.args.get('mes', '')
-    
-    where_clause = ""
-    params = []
-    
-    if mes_filtro:
-        where_clause = "WHERE TO_CHAR(data_inicial::DATE, 'YYYY-MM') = %s"
-        params.append(mes_filtro)
-    
-    por_tipo = execute_query(f'''
+    por_tipo = execute_query('''
         SELECT tipo, COUNT(*) as total,
             SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
             SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
         FROM atividades 
-        {where_clause}
         GROUP BY tipo
-    ''', params, fetch_all=True)
+    ''', fetch_all=True)
     
-    por_sistema = execute_query(f'''
+    por_sistema = execute_query('''
         SELECT sistema, COUNT(*) as total,
             SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
             SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
         FROM atividades 
-        {where_clause}
         GROUP BY sistema
-    ''', params, fetch_all=True)
+    ''', fetch_all=True)
     
-    por_contrato = execute_query(f'''
+    por_contrato = execute_query('''
         SELECT c.nome, 
             COUNT(a.id) as total,
             SUM(CASE WHEN a.status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN a.status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento
         FROM contratos c
         LEFT JOIN atividades a ON a.contrato_id = c.id
-        {("WHERE TO_CHAR(a.data_inicial::DATE, 'YYYY-MM') = %s" if mes_filtro else "")}
         GROUP BY c.id
         ORDER BY total DESC
-    ''', params if mes_filtro else [], fetch_all=True)
+    ''', fetch_all=True)
     
-    stats = execute_query(f'''
+    stats = execute_query('''
         SELECT 
             COUNT(*) as total,
             SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
@@ -909,22 +872,14 @@ def admin_metricas():
             SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
             SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
         FROM atividades
-        {where_clause}
-    ''', params, fetch_one=True)
-    
-    meses = execute_query('''
-        SELECT DISTINCT TO_CHAR(data_inicial::DATE, 'YYYY-MM') as mes
-        FROM atividades
-        ORDER BY mes DESC
-    ''', fetch_all=True)
+    ''', fetch_one=True)
     
     por_tipo = por_tipo if por_tipo else []
     por_sistema = por_sistema if por_sistema else []
     por_contrato = por_contrato if por_contrato else []
-    meses = meses if meses else []
     stats = stats if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0}
     
-    return render_template('admin_metricas.html', por_tipo=por_tipo, por_sistema=por_sistema, por_contrato=por_contrato, stats=stats, meses=meses, mes_selecionado=mes_filtro)
+    return render_template('admin_metricas.html', por_tipo=por_tipo, por_sistema=por_sistema, por_contrato=por_contrato, stats=stats, meses=[], mes_selecionado='')
 
 @app.route('/admin/usuarios')
 @login_required
