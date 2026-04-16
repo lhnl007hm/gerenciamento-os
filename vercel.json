@@ -12,6 +12,7 @@
     }
   ],
   "env": {
-    "SECRET_KEY": "Comp@$$$"
+    "SECRET_KEY": "C0mp@$$$",
+    "DATABASE_URL": "postgresql://postgres:pYROw_2077%21%23@db.ellltlzdvbwissqfjoje.supabase.co:5432/postgres"
   }
 }
