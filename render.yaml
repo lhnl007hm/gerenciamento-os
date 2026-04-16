@@ -6,6 +6,6 @@ services:
     startCommand: python app.py
     envVars:
       - key: SECRET_KEY
-        value: Comp@$$$
-      - key: FLASK_ENV
-        value: production
+        value: C0mp@$$$
+      - key: DATABASE_URL
+        value: postgresql://postgres:pYROw_2077%21%23@db.ellltlzdvbwissqfjoje.supabase.co:5432/postgres
