@@ -209,9 +209,16 @@ def login():
         database_url = os.environ.get('DATABASE_URL')
         
         if database_url and POSTGRES_AVAILABLE:
-            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur = conn.cursor()
             cur.execute("SELECT u.*, c.nome as contrato_nome FROM usuarios u JOIN contratos c ON u.contrato_id = c.id WHERE u.username = %s AND u.senha = %s", (username, senha))
-            user = cur.fetchone()
+            row = cur.fetchone()
+            
+            if row:
+                # Converter manualmente para dicionário
+                colnames = [desc[0] for desc in cur.description]
+                user = dict(zip(colnames, row))
+            else:
+                user = None
             cur.close()
         else:
             cur = conn.cursor()
@@ -228,7 +235,7 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['nome'] = user['nome']
-            session['email'] = user['email'] if user['email'] else 'master@compass.com.br'
+            session['email'] = user.get('email') if user.get('email') else 'master@compass.com.br'
             session['contrato_id'] = user['contrato_id']
             session['contrato_nome'] = user['contrato_nome']
             session['role'] = user['role']
@@ -258,7 +265,7 @@ def dashboard():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s", (session['contrato_id'],))
         total = cur.fetchone()['total']
         cur.execute("SELECT COUNT(*) as total FROM atividades WHERE contrato_id = %s AND status = 'Concluído'", (session['contrato_id'],))
@@ -295,7 +302,7 @@ def atividades():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("""
             SELECT a.*, u.nome as criado_por 
             FROM atividades a
@@ -372,7 +379,7 @@ def editar_atividade(id):
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT * FROM atividades WHERE id = %s AND contrato_id = %s", (id, session['contrato_id']))
         atividade = cur.fetchone()
         cur.close()
@@ -444,7 +451,7 @@ def metricas():
     
     if database_url and POSTGRES_AVAILABLE:
         # PostgreSQL
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         
         # Métricas por tipo
         query_tipo = '''
@@ -594,7 +601,7 @@ def exportar_relatorio():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute('''
             SELECT numero_os, titulo, TO_CHAR(data_inicial, 'DD/MM/YYYY') as data_inicial, 
                    TO_CHAR(data_final, 'DD/MM/YYYY') as data_final, sistema, status, tipo, descricao
@@ -634,7 +641,7 @@ def admin_dashboard():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT COUNT(*) as total FROM atividades")
         total = cur.fetchone()['total']
         cur.execute("SELECT COUNT(*) as total FROM atividades WHERE status = 'Concluído'")
@@ -709,7 +716,7 @@ def admin_atividades():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("""
             SELECT a.*, c.nome as contrato_nome, u.nome as criado_por 
             FROM atividades a
@@ -743,7 +750,7 @@ def admin_metricas():
     mes_filtro = request.args.get('mes', '')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         
         query_tipo = '''
             SELECT tipo, COUNT(*) as total,
@@ -899,7 +906,7 @@ def admin_exportar_relatorio():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute('''
             SELECT a.numero_os, a.titulo, 
                    TO_CHAR(a.data_inicial, 'DD/MM/YYYY') as data_inicial,
@@ -965,7 +972,7 @@ def admin_nova_atividade():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT * FROM contratos WHERE ativo = 1")
         contratos = cur.fetchall()
         cur.close()
@@ -1021,7 +1028,7 @@ def admin_editar_atividade(id):
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT * FROM atividades WHERE id = %s", (id,))
         atividade = cur.fetchone()
         cur.execute("SELECT * FROM contratos WHERE ativo = 1")
@@ -1097,7 +1104,7 @@ def admin_usuarios():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("""
             SELECT u.*, c.nome as contrato_nome 
             FROM usuarios u 
@@ -1127,7 +1134,7 @@ def admin_novo_usuario():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT * FROM contratos")
         contratos = cur.fetchall()
         cur.close()
@@ -1180,7 +1187,7 @@ def admin_editar_usuario(id):
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT * FROM usuarios WHERE id = %s", (id,))
         usuario = cur.fetchone()
         cur.execute("SELECT * FROM contratos")
@@ -1287,7 +1294,7 @@ def admin_contratos():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT * FROM contratos ORDER BY id")
         contratos = cur.fetchall()
         cur.close()
@@ -1339,7 +1346,7 @@ def admin_editar_contrato(id):
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT * FROM contratos WHERE id = %s", (id,))
         contrato = cur.fetchone()
         cur.close()
@@ -1390,7 +1397,7 @@ def admin_excluir_contrato(id):
     
     # Verificar se tem usuários
     if database_url and POSTGRES_AVAILABLE:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         cur.execute("SELECT COUNT(*) as total FROM usuarios WHERE contrato_id = %s", (id,))
         usuarios = cur.fetchone()
         cur.close()
