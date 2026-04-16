@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: compass-os
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: SECRET_KEY
+        value: Comp@$$$
+      - key: FLASK_ENV
+        value: production
