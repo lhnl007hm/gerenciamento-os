@@ -912,9 +912,9 @@ def admin_novo_usuario():
         
         try:
             execute_query('''
-                INSERT INTO usuarios (username, senha, nome, email, contrato_id, role, ativo)
-                VALUES (%s, %s, %s, %s, %s, %s, 1)
-            ''', (username, senha, nome, email, contrato_id, role), commit=True)
+    INSERT INTO usuarios (username, senha, nome, email, contrato_id, role, ativo)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+''', (username, senha, nome, email, contrato_id, role), commit=True)
             flash('Usuário criado com sucesso!', 'success')
         except Exception as e:
             flash(f'Erro: {str(e)}', 'danger')
@@ -927,7 +927,7 @@ def admin_novo_usuario():
 @login_required
 @admin_required
 def admin_editar_usuario(id):
-    usuario = execute_query("SELECT * FROM usuarios WHERE id = %s", (id,), fetch_one=True)
+    usuario = execute_query("SELECT * FROM usuarios WHERE id = ?", (id,), fetch_one=True)
     contratos = execute_query("SELECT * FROM contratos", fetch_all=True)
     contratos = contratos if contratos else []
     
@@ -946,14 +946,14 @@ def admin_editar_usuario(id):
             if request.form.get('senha'):
                 execute_query('''
                     UPDATE usuarios 
-                    SET nome = %s, email = %s, contrato_id = %s, role = %s, ativo = %s, senha = %s
-                    WHERE id = %s
+                    SET nome = ?, email = ?, contrato_id = ?, role = ?, ativo = ?, senha = ?
+WHERE id = ?
                 ''', (nome, email, contrato_id, role, ativo, request.form['senha'], id), commit=True)
             else:
                 execute_query('''
                     UPDATE usuarios 
-                    SET nome = %s, email = %s, contrato_id = %s, role = %s, ativo = %s
-                    WHERE id = %s
+                    SET nome = ?, email = ?, contrato_id = ?, role = ?, ativo = ?
+WHERE id = ?
                 ''', (nome, email, contrato_id, role, ativo, id), commit=True)
             flash('Usuário atualizado!', 'success')
         except Exception as e:
@@ -970,7 +970,7 @@ def admin_excluir_usuario(id):
     if id == session['user_id']:
         return jsonify({'success': False, 'error': 'Não pode excluir seu próprio usuário!'})
     
-    execute_query("DELETE FROM usuarios WHERE id = %s", (id,), commit=True)
+    execute_query("DELETE FROM usuarios WHERE id = ?", (id,), commit=True)
     return jsonify({'success': True})
 
 @app.route('/admin/contratos')
@@ -990,7 +990,7 @@ def admin_novo_contrato():
         codigo = request.form['codigo']
         
         try:
-            execute_query("INSERT INTO contratos (nome, codigo, ativo) VALUES (%s, %s, 1)", (nome, codigo), commit=True)
+            execute_query("INSERT INTO contratos (nome, codigo, ativo) VALUES (?, ?, 1)", (nome, codigo), commit=True)
             flash('Contrato criado com sucesso!', 'success')
         except Exception as e:
             flash(f'Erro: {str(e)}', 'danger')
@@ -1003,7 +1003,7 @@ def admin_novo_contrato():
 @login_required
 @admin_required
 def admin_editar_contrato(id):
-    contrato = execute_query("SELECT * FROM contratos WHERE id = %s", (id,), fetch_one=True)
+    contrato = execute_query("SELECT * FROM contratos WHERE id = ?", (id,), fetch_one=True)
     
     if not contrato:
         flash('Contrato não encontrado!', 'danger')
@@ -1015,7 +1015,7 @@ def admin_editar_contrato(id):
         ativo = 1 if request.form.get('ativo') else 0
         
         try:
-            execute_query("UPDATE contratos SET nome = %s, codigo = %s, ativo = %s WHERE id = %s", (nome, codigo, ativo, id), commit=True)
+            execute_query("UPDATE contratos SET nome = ?, codigo = ?, ativo = ? WHERE id = ?", (nome, codigo, ativo, id), commit=True)
             flash('Contrato atualizado!', 'success')
         except Exception as e:
             flash(f'Erro: {str(e)}', 'danger')
@@ -1028,12 +1028,12 @@ def admin_editar_contrato(id):
 @login_required
 @admin_required
 def admin_excluir_contrato(id):
-    usuarios = execute_query("SELECT COUNT(*) as total FROM usuarios WHERE contrato_id = %s", (id,), fetch_one=True)
+    usuarios = execute_query("SELECT COUNT(*) as total FROM usuarios WHERE contrato_id = ?", (id,), fetch_one=True)
     
     if usuarios and usuarios['total'] > 0:
         return jsonify({'success': False, 'error': 'Existem usuários vinculados a este contrato!'})
     
-    execute_query("DELETE FROM contratos WHERE id = %s", (id,), commit=True)
+    execute_query("DELETE FROM contratos WHERE id = ?", (id,), commit=True)
     return jsonify({'success': True})
 
 # ============ ERROR HANDLERS ============
