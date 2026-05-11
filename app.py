@@ -503,95 +503,122 @@ def excluir_atividade(id):
 @app.route('/metricas')
 @login_required
 def metricas():
-    database_url = os.environ.get('DATABASE_URL')
+    conn = get_db()
     mes_filtro = request.args.get('mes', '')
     
-    if database_url and PSYCOPG2_AVAILABLE:
-        # PostgreSQL - versão simplificada sem filtro de mês complexo
-        por_tipo = execute_query('''
-            SELECT tipo, COUNT(*) as total,
-                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
-                SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
-            FROM atividades 
-            WHERE contrato_id = %s
-            GROUP BY tipo
-        ''', (session['contrato_id'],), fetch_all=True)
-        
-        por_sistema = execute_query('''
-            SELECT sistema, COUNT(*) as total,
-                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
-                SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
-            FROM atividades 
-            WHERE contrato_id = %s
-            GROUP BY sistema
-        ''', (session['contrato_id'],), fetch_all=True)
-        
-        stats = execute_query('''
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
-                SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-                SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
-            FROM atividades
-            WHERE contrato_id = %s
-        ''', (session['contrato_id'],), fetch_one=True)
-        
-        por_tipo = por_tipo if por_tipo else []
-        por_sistema = por_sistema if por_sistema else []
-        stats = stats if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0}
-        meses = []
-    else:
-        conn = get_db()
-        
-        por_tipo = conn.execute('''
-            SELECT tipo, COUNT(*) as total,
-                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
-                SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
-            FROM atividades 
-            WHERE contrato_id = ?
-            GROUP BY tipo
-        ''', (session['contrato_id'],)).fetchall()
-        
-        por_sistema = conn.execute('''
-            SELECT sistema, COUNT(*) as total,
-                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
-                SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
-            FROM atividades 
-            WHERE contrato_id = ?
-            GROUP BY sistema
-        ''', (session['contrato_id'],)).fetchall()
-        
-        stats = conn.execute('''
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
-                SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-                SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-                SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
-            FROM atividades
-            WHERE contrato_id = ?
-        ''', (session['contrato_id'],)).fetchone()
-        
-        meses = conn.execute('''
-            SELECT DISTINCT strftime('%Y-%m', data_inicial) as mes
-            FROM atividades
-            WHERE contrato_id = ?
-            ORDER BY mes DESC
-        ''', (session['contrato_id'],)).fetchall()
-        
-        conn.close()
-        
-        por_tipo = [dict(r) for r in por_tipo] if por_tipo else []
-        por_sistema = [dict(r) for r in por_sistema] if por_sistema else []
-        meses = [dict(r) for r in meses] if meses else []
-        stats = dict(stats) if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0}
+    where_clause = "WHERE contrato_id = ?"
+    params = [session['contrato_id']]
     
-    return render_template('metricas.html', por_tipo=por_tipo, por_sistema=por_sistema, stats=stats, meses=meses, mes_selecionado=mes_filtro)
+    if mes_filtro:
+        where_clause += " AND strftime('%Y-%m', data_inicial) = ?"
+        params.append(mes_filtro)
+    
+    # ============ MÉTRICAS EXISTENTES ============
+    por_tipo = conn.execute(f'''
+        SELECT tipo, COUNT(*) as total,
+            SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
+            SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
+            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
+            ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN julianday(data_final) - julianday(data_inicial) ELSE NULL END), 1) as media_dias
+        FROM atividades 
+        {where_clause}
+        GROUP BY tipo
+    ''', params).fetchall()
+    
+    por_sistema = conn.execute(f'''
+        SELECT sistema, COUNT(*) as total,
+            SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
+            SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
+            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
+        FROM atividades 
+        {where_clause}
+        GROUP BY sistema
+    ''', params).fetchall()
+    
+    stats = conn.execute(f'''
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
+            SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
+            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
+            SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas,
+            ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN julianday(data_final) - julianday(data_inicial) ELSE NULL END), 1) as media_geral_dias
+        FROM atividades
+        {where_clause}
+    ''', params).fetchone()
+    
+    meses = conn.execute('''
+        SELECT DISTINCT strftime('%Y-%m', data_inicial) as mes
+        FROM atividades
+        WHERE contrato_id = ?
+        ORDER BY mes DESC
+    ''', (session['contrato_id'],)).fetchall()
+    
+    # ============ NOVAS MÉTRICAS ============
+    
+    # ============ NOVAS MÉTRICAS (COM FILTRO) ============
+    semanas = conn.execute(f'''
+        SELECT 
+            strftime('%W', data_inicial) as semana_num,
+            'Semana ' || strftime('%W', data_inicial) as semana_label,
+            SUM(CASE WHEN tipo = 'Manutenção Preventiva' THEN 1 ELSE 0 END) as preventiva,
+            SUM(CASE WHEN tipo = 'Manutenção Corretiva' THEN 1 ELSE 0 END) as corretiva
+        FROM atividades 
+        {where_clause}
+        GROUP BY semana_num
+        ORDER BY semana_num DESC
+        LIMIT 5
+    ''', params).fetchall()
+    
+    sistema_prev_corr = conn.execute(f'''
+        SELECT 
+            sistema,
+            SUM(CASE WHEN tipo = 'Manutenção Preventiva' THEN 1 ELSE 0 END) as preventiva,
+            SUM(CASE WHEN tipo = 'Manutenção Corretiva' THEN 1 ELSE 0 END) as corretiva
+        FROM atividades 
+        {where_clause}
+        GROUP BY sistema
+        ORDER BY (preventiva + corretiva) DESC
+    ''', params).fetchall()
+    
+    preventivas_por_sistema = conn.execute(f'''
+    SELECT sistema, COUNT(*) as total
+    FROM atividades 
+    {where_clause + " AND tipo = 'Manutenção Preventiva'" if where_clause else "WHERE tipo = 'Manutenção Preventiva'"}
+    GROUP BY sistema
+    ORDER BY total DESC
+''', params).fetchall()
+    
+    corretivas_por_sistema = conn.execute(f'''
+    SELECT sistema, COUNT(*) as total
+    FROM atividades 
+    {where_clause + " AND tipo = 'Manutenção Corretiva'" if where_clause else "WHERE tipo = 'Manutenção Corretiva'"}
+    GROUP BY sistema
+    ORDER BY total DESC
+''', params).fetchall()
+    
+    conn.close()
+    
+    # Converter para dicionários
+    por_tipo = [dict(r) for r in por_tipo] if por_tipo else []
+    por_sistema = [dict(r) for r in por_sistema] if por_sistema else []
+    meses = [dict(r) for r in meses] if meses else []
+    stats = dict(stats) if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0, 'media_geral_dias': 0}
+    semanas = [dict(r) for r in semanas] if semanas else []
+    sistema_prev_corr = [dict(r) for r in sistema_prev_corr] if sistema_prev_corr else []
+    preventivas_por_sistema = [dict(r) for r in preventivas_por_sistema] if preventivas_por_sistema else []
+    corretivas_por_sistema = [dict(r) for r in corretivas_por_sistema] if corretivas_por_sistema else []
+    
+    return render_template('metricas.html', 
+                         por_tipo=por_tipo, 
+                         por_sistema=por_sistema, 
+                         stats=stats, 
+                         meses=meses, 
+                         mes_selecionado=mes_filtro,
+                         semanas=semanas,
+                        sistema_prev_corr=sistema_prev_corr,
+                        preventivas_por_sistema=preventivas_por_sistema,
+                        corretivas_por_sistema=corretivas_por_sistema)
 
 @app.route('/metricas/exportar')
 @login_required
@@ -835,51 +862,142 @@ def admin_excluir_atividade(id):
 @login_required
 @admin_required
 def admin_metricas():
-    por_tipo = execute_query('''
+    conn = get_db()
+    mes_filtro = request.args.get('mes', '')
+    
+    where_clause = ""
+    params = []
+    
+    if mes_filtro:
+        where_clause = "WHERE strftime('%Y-%m', data_inicial) = ?"
+        params.append(mes_filtro)
+    
+    # ============ MÉTRICAS EXISTENTES ============
+    por_tipo = conn.execute(f'''
         SELECT tipo, COUNT(*) as total,
             SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
-            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
+            SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
+            ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN julianday(data_final) - julianday(data_inicial) ELSE NULL END), 1) as media_dias
         FROM atividades 
+        {where_clause}
         GROUP BY tipo
-    ''', fetch_all=True)
+    ''', params).fetchall()
     
-    por_sistema = execute_query('''
+    por_sistema = conn.execute(f'''
         SELECT sistema, COUNT(*) as total,
             SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
             SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer
         FROM atividades 
+        {where_clause}
         GROUP BY sistema
-    ''', fetch_all=True)
+    ''', params).fetchall()
     
-    por_contrato = execute_query('''
+    por_contrato = conn.execute(f'''
         SELECT c.nome, 
             COUNT(a.id) as total,
             SUM(CASE WHEN a.status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN a.status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento
         FROM contratos c
         LEFT JOIN atividades a ON a.contrato_id = c.id
+        {where_clause.replace('data_inicial', 'a.data_inicial') if mes_filtro else ""}
         GROUP BY c.id
         ORDER BY total DESC
-    ''', fetch_all=True)
+    ''', params).fetchall()
     
-    stats = execute_query('''
+    stats = conn.execute(f'''
         SELECT 
             COUNT(*) as total,
             SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidas,
             SUM(CASE WHEN status = 'Em Andamento' THEN 1 ELSE 0 END) as em_andamento,
             SUM(CASE WHEN status = 'À Fazer' THEN 1 ELSE 0 END) as afazer,
-            SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas
+            SUM(CASE WHEN status = 'Cancelado' THEN 1 ELSE 0 END) as canceladas,
+            ROUND(AVG(CASE WHEN data_final IS NOT NULL THEN julianday(data_final) - julianday(data_inicial) ELSE NULL END), 1) as media_geral_dias
         FROM atividades
-    ''', fetch_one=True)
+        {where_clause}
+    ''', params).fetchone()
     
-    por_tipo = por_tipo if por_tipo else []
-    por_sistema = por_sistema if por_sistema else []
-    por_contrato = por_contrato if por_contrato else []
-    stats = stats if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0}
+    meses = conn.execute('''
+        SELECT DISTINCT strftime('%Y-%m', data_inicial) as mes
+        FROM atividades
+        ORDER BY mes DESC
+    ''').fetchall()
     
-    return render_template('admin_metricas.html', por_tipo=por_tipo, por_sistema=por_sistema, por_contrato=por_contrato, stats=stats, meses=[], mes_selecionado='')
+    # ============ NOVAS MÉTRICAS (COM FILTRO) ============
+    
+    # 1. Preventivas x Corretivas por Semana
+    semanas = conn.execute(f'''
+        SELECT 
+            strftime('%W', data_inicial) as semana_num,
+            'Semana ' || strftime('%W', data_inicial) as semana_label,
+            SUM(CASE WHEN tipo = 'Manutenção Preventiva' THEN 1 ELSE 0 END) as preventiva,
+            SUM(CASE WHEN tipo = 'Manutenção Corretiva' THEN 1 ELSE 0 END) as corretiva
+        FROM atividades 
+        {where_clause}
+        GROUP BY semana_num
+        ORDER BY semana_num DESC
+        LIMIT 5
+    ''', params).fetchall()
+    
+    # 2. Atividades por Sistema - Preventivas x Corretivas
+    sistema_prev_corr = conn.execute(f'''
+        SELECT 
+            sistema,
+            SUM(CASE WHEN tipo = 'Manutenção Preventiva' THEN 1 ELSE 0 END) as preventiva,
+            SUM(CASE WHEN tipo = 'Manutenção Corretiva' THEN 1 ELSE 0 END) as corretiva
+        FROM atividades 
+        {where_clause}
+        GROUP BY sistema
+        ORDER BY (preventiva + corretiva) DESC
+    ''', params).fetchall()
+    
+    # 3. Preventivas por sistema
+    preventivas_por_sistema = conn.execute(f'''
+        SELECT 
+            sistema,
+            COUNT(*) as total
+        FROM atividades 
+        {where_clause + " AND tipo = 'Manutenção Preventiva'" if where_clause else "WHERE tipo = 'Manutenção Preventiva'"}
+        GROUP BY sistema
+        ORDER BY total DESC
+    ''', params).fetchall()
+    
+    # 4. Corretivas por sistema
+    corretivas_por_sistema = conn.execute(f'''
+        SELECT 
+            sistema,
+            COUNT(*) as total
+        FROM atividades 
+        {where_clause + " AND tipo = 'Manutenção Corretiva'" if where_clause else "WHERE tipo = 'Manutenção Corretiva'"}
+        GROUP BY sistema
+        ORDER BY total DESC
+    ''', params).fetchall()
+    
+    conn.close()
+    
+    # Converter para dicionários
+    por_tipo = [dict(r) for r in por_tipo] if por_tipo else []
+    por_sistema = [dict(r) for r in por_sistema] if por_sistema else []
+    por_contrato = [dict(r) for r in por_contrato] if por_contrato else []
+    meses = [dict(r) for r in meses] if meses else []
+    stats = dict(stats) if stats else {'total': 0, 'concluidas': 0, 'em_andamento': 0, 'afazer': 0, 'canceladas': 0, 'media_geral_dias': 0}
+    semanas = [dict(r) for r in semanas] if semanas else []
+    sistema_prev_corr = [dict(r) for r in sistema_prev_corr] if sistema_prev_corr else []
+    preventivas_por_sistema = [dict(r) for r in preventivas_por_sistema] if preventivas_por_sistema else []
+    corretivas_por_sistema = [dict(r) for r in corretivas_por_sistema] if corretivas_por_sistema else []
+    
+    return render_template('admin_metricas.html', 
+                         por_tipo=por_tipo,
+                         por_sistema=por_sistema,
+                         por_contrato=por_contrato,
+                         stats=stats,
+                         meses=meses,
+                         mes_selecionado=mes_filtro,
+                         semanas=semanas,
+                         sistema_prev_corr=sistema_prev_corr,
+                         preventivas_por_sistema=preventivas_por_sistema,
+                         corretivas_por_sistema=corretivas_por_sistema)
 
 @app.route('/admin/usuarios')
 @login_required

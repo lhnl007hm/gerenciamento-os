@@ -307,28 +307,159 @@
           </div>
         </div>
       </div>
+      <!-- NOVOS GRÁFICOS - PREVENTIVAS X CORRETIVAS -->
+      <div class="row mb-4">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-chart-bar me-2"></i>Preventivas x Corretivas
+                por Semana
+              </h5>
+            </div>
+            <div class="card-body">
+              <canvas id="prevCorrChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ATIVIDADES POR SISTEMA - PREVENTIVAS X CORRETIVAS -->
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-server me-2"></i>Atividades por Sistema
+              </h5>
+              <small class="text-muted ms-3">Preventivas x Corretivas</small>
+            </div>
+            <div class="card-body">
+              <canvas id="sistemaPrevCorrChart"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-shield-alt me-2"></i>Preventivas
+              </h5>
+              <small class="text-muted ms-3">Por quantidade de ativos</small>
+            </div>
+            <div class="card-body">
+              <canvas id="preventivasChart"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0"><i class="fas fa-wrench me-2"></i>Corretivas</h5>
+              <small class="text-muted ms-3">Por quantidade de ativos</small>
+            </div>
+            <div class="card-body">
+              <canvas id="corretivasChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-      // Gráfico de Status
-      const statusCtx = document.getElementById('statusChart').getContext('2d');
-      new Chart(statusCtx, {
-          type: 'doughnut',
+            // Gráfico de Status
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Concluídas', 'Em Andamento', 'À Fazer', 'Canceladas'],
+                    datasets: [{
+                        data: [
+                            {{ stats.concluidas }},
+                            {{ stats.em_andamento }},
+                            {{ stats.afazer }},
+                            {{ stats.canceladas }}
+                        ],
+                        backgroundColor: ['#84C464', '#fdcb6e', '#74b9ff', '#d63031']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#ffffff' }
+                        }
+                    }
+                }
+            });
+
+            // Gráfico de Sistemas
+            const sistemaCtx = document.getElementById('sistemaChart').getContext('2d');
+            new Chart(sistemaCtx, {
+                type: 'bar',
+                data: {
+                    labels: [{% for s in por_sistema %}'{{ s.sistema }}'{% if not loop.last %},{% endif %}{% endfor %}],
+                    datasets: [{
+                        label: 'Total de Atividades',
+                        data: [{% for s in por_sistema %}{{ s.total }}{% if not loop.last %},{% endif %}{% endfor %}],
+                        backgroundColor: '#84C464'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#7C7C7C' },
+                            grid: { color: '#262626' }
+                        },
+                        x: {
+                            ticks: { color: '#7C7C7C' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            // Gráfico Preventivas x Corretivas por Semana
+      const prevCorrCtx = document.getElementById('prevCorrChart').getContext('2d');
+      new Chart(prevCorrCtx, {
+          type: 'bar',
           data: {
-              labels: ['Concluídas', 'Em Andamento', 'À Fazer', 'Canceladas'],
-              datasets: [{
-                  data: [
-                      {{ stats.concluidas }},
-                      {{ stats.em_andamento }},
-                      {{ stats.afazer }},
-                      {{ stats.canceladas }}
-                  ],
-                  backgroundColor: ['#84C464', '#fdcb6e', '#74b9ff', '#d63031']
-              }]
+              labels: [{% for s in semanas %}'{{ s.semana_label }}'{% if not loop.last %},{% endif %}{% endfor %}],
+              datasets: [
+                  {
+                      label: 'Preventiva',
+                      data: [{% for s in semanas %}{{ s.preventiva }}{% if not loop.last %},{% endif %}{% endfor %}],
+                      backgroundColor: '#84C464',
+                      borderColor: '#6ab04c',
+                      borderWidth: 1
+                  },
+                  {
+                      label: 'Corretiva',
+                      data: [{% for s in semanas %}{{ s.corretiva }}{% if not loop.last %},{% endif %}{% endfor %}],
+                      backgroundColor: '#d63031',
+                      borderColor: '#c0392b',
+                      borderWidth: 1
+                  }
+              ]
           },
           options: {
               responsive: true,
+              scales: {
+                  y: {
+                      beginAtZero: true,
+                      ticks: { stepSize: 2, color: '#7C7C7C' },
+                      grid: { color: '#262626' }
+                  },
+                  x: {
+                      ticks: { color: '#7C7C7C' },
+                      grid: { display: false }
+                  }
+              },
               plugins: {
                   legend: {
                       position: 'bottom',
@@ -338,32 +469,106 @@
           }
       });
 
-      // Gráfico de Sistemas
-      const sistemaCtx = document.getElementById('sistemaChart').getContext('2d');
-      new Chart(sistemaCtx, {
+      // Gráfico Atividades por Sistema - Preventivas x Corretivas
+      const sistemaPrevCorrCtx = document.getElementById('sistemaPrevCorrChart').getContext('2d');
+      new Chart(sistemaPrevCorrCtx, {
           type: 'bar',
           data: {
-              labels: [{% for s in por_sistema %}'{{ s.sistema }}'{% if not loop.last %},{% endif %}{% endfor %}],
+              labels: [{% for s in sistema_prev_corr %}'{{ s.sistema }}'{% if not loop.last %},{% endif %}{% endfor %}],
+              datasets: [
+                  {
+                      label: 'Preventiva',
+                      data: [{% for s in sistema_prev_corr %}{{ s.preventiva }}{% if not loop.last %},{% endif %}{% endfor %}],
+                      backgroundColor: '#84C464'
+                  },
+                  {
+                      label: 'Corretiva',
+                      data: [{% for s in sistema_prev_corr %}{{ s.corretiva }}{% if not loop.last %},{% endif %}{% endfor %}],
+                      backgroundColor: '#d63031'
+                  }
+              ]
+          },
+          options: {
+              indexAxis: 'y',
+              responsive: true,
+              scales: {
+                  x: {
+                      beginAtZero: true,
+                      ticks: { stepSize: 5, color: '#7C7C7C' },
+                      grid: { color: '#262626' }
+                  },
+                  y: {
+                      ticks: { color: '#7C7C7C' },
+                      grid: { display: false }
+                  }
+              },
+              plugins: {
+                  legend: {
+                      position: 'bottom',
+                      labels: { color: '#ffffff' }
+                  }
+              }
+          }
+      });
+
+      // Gráfico Preventivas por Sistema
+      const preventivasCtx = document.getElementById('preventivasChart').getContext('2d');
+      new Chart(preventivasCtx, {
+          type: 'bar',
+          data: {
+              labels: [{% for p in preventivas_por_sistema %}'{{ p.sistema }}'{% if not loop.last %},{% endif %}{% endfor %}],
               datasets: [{
-                  label: 'Total de Atividades',
-                  data: [{% for s in por_sistema %}{{ s.total }}{% if not loop.last %},{% endif %}{% endfor %}],
+                  label: 'Preventivas',
+                  data: [{% for p in preventivas_por_sistema %}{{ p.total }}{% if not loop.last %},{% endif %}{% endfor %}],
                   backgroundColor: '#84C464'
               }]
           },
           options: {
               responsive: true,
+              plugins: {
+                  legend: { display: false }
+              },
               scales: {
                   y: {
                       beginAtZero: true,
-                      ticks: { color: '#7C7C7C' },
+                      ticks: { stepSize: 2, color: '#7C7C7C' },
                       grid: { color: '#262626' }
                   },
                   x: {
-                      ticks: { color: '#7C7C7C' }
+                      ticks: { color: '#7C7C7C' },
+                      grid: { display: false }
                   }
-              },
+              }
+          }
+      });
+
+      // Gráfico Corretivas por Sistema
+      const corretivasCtx = document.getElementById('corretivasChart').getContext('2d');
+      new Chart(corretivasCtx, {
+          type: 'bar',
+          data: {
+              labels: [{% for c in corretivas_por_sistema %}'{{ c.sistema }}'{% if not loop.last %},{% endif %}{% endfor %}],
+              datasets: [{
+                  label: 'Corretivas',
+                  data: [{% for c in corretivas_por_sistema %}{{ c.total }}{% if not loop.last %},{% endif %}{% endfor %}],
+                  backgroundColor: '#d63031'
+              }]
+          },
+          options: {
+              responsive: true,
               plugins: {
-                  legend: { labels: { color: '#ffffff' } }
+                  legend: { display: false }
+              },
+              scales: {
+                  y: {
+                      beginAtZero: true,
+                      ticks: { stepSize: 2, color: '#7C7C7C' },
+                      grid: { color: '#262626' }
+                  },
+                  x: {
+                      ticks: { color: '#7C7C7C' },
+                      grid: { display: false }
+                  }
               }
           }
       });
